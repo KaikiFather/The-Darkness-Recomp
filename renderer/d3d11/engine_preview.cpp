@@ -49,10 +49,11 @@ float4 colorMain(Fragment f) : SV_TARGET {
     return colorImage.Sample(imageSampler, f.uv) * f.color;
 }
 float4 videoMain(Fragment f) : SV_TARGET {
-    // Original CMWnd_ModTexture_PaintVideo_YUV2RGB.fp: U in luminance,
-    // V in alpha. BE A8L8 storage is V,U, uploaded unchanged as host R,G.
+    // Original8279DDC0's CPU conversion reads U first (blue coefficient),
+    // then V (red coefficient). These decoder bytes precede the uploader's
+    // endian conversion; host R8G8 therefore already contains logical U,V.
     float y = alphaImage.Sample(imageSampler, f.uv);
-    float2 uv = chromaImage.Sample(imageSampler, f.uv).yx - 0.5;
+    float2 uv = chromaImage.Sample(imageSampler, f.uv).xy - 0.5;
     float3 rgb = y * 1.164 - 0.073035294117647058823529411764044;
     rgb += float3(1.596 * uv.y, -0.391 * uv.x - 0.813 * uv.y, 2.018 * uv.x);
     return float4(saturate(rgb * f.color.rgb), 0);

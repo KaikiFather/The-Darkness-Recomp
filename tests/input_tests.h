@@ -115,6 +115,18 @@ static void testInputContract(PPCContext& ctx) {
     SendMessageW(window, WM_SETFOCUS, 0, 0);
     check(state() == ERROR_SUCCESS && zero(output + 4, 12), "Attached keyboard did not provide a neutral controller");
     uint32_t packet = memory->read32(output);
+    // Initial menus have no client/GUI signal yet. Keep their released wheel
+    // navigation, then discard every queued detent at the first gameplay signal.
+    input.setMouseLookEnabled(false);
+    SendMessageW(window,WM_MOUSEWHEEL,MAKEWPARAM(0,short(-240)),0);state();
+    check(PPC_LOAD_U16(output+4)==XINPUT_GAMEPAD_DPAD_DOWN,"Startup menu wheel fallback was lost");
+    input.setGuestMenuActive(false);state();
+    check(PPC_LOAD_U16(output+4)==0,"First gameplay signal replayed startup menu wheel input");
+    SendMessageW(window,WM_MOUSEWHEEL,MAKEWPARAM(0,WHEEL_DELTA),0);state();
+    check(PPC_LOAD_U16(output+4)==0,"Released gameplay wheel changed a power after the first guest signal");
+    inputTicks+=100;state();
+    check(PPC_LOAD_U16(output+4)==0,"Released gameplay wheel retained a queued startup detent");
+    packet=memory->read32(output);
     input.setMouseLookEnabled(true);
     SendMessageW(window, WM_KEYDOWN, VK_RETURN, 0);
     SendMessageW(window, WM_KEYDOWN, 'W', 0);
@@ -231,6 +243,36 @@ static void testInputContract(PPCContext& ctx) {
     check(PPC_LOAD_U16(output+4)==XINPUT_GAMEPAD_DPAD_RIGHT,"Wheel did not select next weapon");
     inputTicks+=40;state();check(PPC_LOAD_U16(output+4)==0,"Wheel lacked a release edge");
     inputTicks+=20;state();check(PPC_LOAD_U16(output+4)==XINPUT_GAMEPAD_DPAD_RIGHT,"Second wheel detent was lost");
+    input.setGuestMenuActive(true);
+    state();check(PPC_LOAD_U16(output+4)==0,"Opening dialogue replayed a gameplay wheel press");
+    SendMessageW(window,WM_MOUSEWHEEL,MAKEWPARAM(0,60),0);state();
+    check(PPC_LOAD_U16(output+4)==0,"Partial dialogue wheel detent changed a choice");
+    SendMessageW(window,WM_MOUSEWHEEL,MAKEWPARAM(0,180),0);state();
+    check(PPC_LOAD_U16(output+4)==XINPUT_GAMEPAD_DPAD_UP,"Captured dialogue wheel did not select the previous choice");
+    inputTicks+=40;state();check(PPC_LOAD_U16(output+4)==0,"Dialogue wheel lacked a release edge");
+    inputTicks+=20;state();check(PPC_LOAD_U16(output+4)==XINPUT_GAMEPAD_DPAD_UP,"Second dialogue wheel detent was lost");
+    input.setGuestMenuActive(false);state();
+    check(PPC_LOAD_U16(output+4)==0,"Closing dialogue replayed a choice as a weapon switch");
+    SendMessageW(window,WM_MOUSEWHEEL,MAKEWPARAM(0,short(-120)),0);state();
+    check(PPC_LOAD_U16(output+4)==XINPUT_GAMEPAD_DPAD_LEFT,"Dialogue exit did not restore previous-weapon wheel input");
+    input.setMouseLookEnabled(false);
+    // F2 releases capture without pausing. An established gameplay context
+    // must ignore wheel input rather than synthesizing the power-cycle keys.
+    SendMessageW(window,WM_MOUSEWHEEL,MAKEWPARAM(0,60),0);state();
+    SendMessageW(window,WM_MOUSEWHEEL,MAKEWPARAM(0,180),0);state();
+    check(PPC_LOAD_U16(output+4)==0,"F2 released gameplay wheel changed a power");
+    inputTicks+=100;state();
+    check(PPC_LOAD_U16(output+4)==0,"F2 released gameplay wheel queued later input");
+    input.setGuestMenuActive(true);
+    SendMessageW(window,WM_MOUSEWHEEL,MAKEWPARAM(0,short(-240)),0);state();
+    check(PPC_LOAD_U16(output+4)==XINPUT_GAMEPAD_DPAD_DOWN,"Released menu wheel did not select the next choice");
+    inputTicks+=40;state();check(PPC_LOAD_U16(output+4)==0,"Released menu wheel lacked a release edge");
+    input.setGuestMenuActive(false);state();
+    check(PPC_LOAD_U16(output+4)==0,"Released GUI exit retained queued menu wheel input");
+    SendMessageW(window,WM_MOUSEWHEEL,MAKEWPARAM(0,short(-120)),0);state();
+    check(PPC_LOAD_U16(output+4)==0,"Released GUI exit did not restore gameplay wheel suppression");
+    input.setMouseLookEnabled(true);state();
+    check(PPC_LOAD_U16(output+4)==0,"Recapture replayed menu wheel input as a weapon switch");
     SendMessageW(window,WM_LBUTTONDOWN,MK_LBUTTON,0);
     SendMessageW(window,WM_RBUTTONDOWN,MK_RBUTTON,0);
     SendMessageW(window,WM_MBUTTONDOWN,MK_MBUTTON,0);state();
@@ -242,6 +284,8 @@ static void testInputContract(PPCContext& ctx) {
           "Focus loss retained captured mouse input");
     SendMessageW(window,WM_SETFOCUS,0,0);state();
     check(zero(output+4,12),"Focus regain replayed mouse or wheel input");
+    SendMessageW(window,WM_MOUSEWHEEL,MAKEWPARAM(0,WHEEL_DELTA),0);state();
+    check(zero(output+4,12),"Focus regain forgot established gameplay wheel ownership");
 
     inputStatus[1] = ERROR_SUCCESS;
     inputStates[1].Gamepad = {XINPUT_GAMEPAD_Y, 0, 0, 0, 0, -32768, 32767};

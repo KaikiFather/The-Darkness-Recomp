@@ -11,6 +11,20 @@ import re
 from compile_vertex_template import parse
 
 ASSETS = {
+    'System/Gl/ARB_fragment_program/VBOp_FP20_Water.fp': '46d9f43f364c8c7358904e5670d139ed2e9471b84ae9358732fbe713796e7e4d',
+    'System/Gl/ARB_fragment_program/VBOp_FP20_Water2.fp': '20ec6a364fb6857116ffb752ba84c41fbfd48fedc7ef808352b1fde65f8bd1b3',
+    'System/Gl/ARB_fragment_program/VBOp_FP20_CubeWater.fp': '9ccfc467dbee54c8d0f44b9337c1640f85475bbc4219c21e65a18a8f548493db',
+    'System/Gl/ARB_fragment_program/VBOp_FP20_CubeWater2.fp': 'a56697941c85a02886c516196890f6489490aeed77d373a8a6a985f6c54370f1',
+    'System/Gl/ARB_fragment_program/XRShader_FP20_Decal.fp': 'fe911d651a2f9f3441c1b66e52ac5ee3e3c54a02e1b716d9fb5fe844193346d7',
+    'System/Gl/ARB_fragment_program/XRShader_DecalTMProj.fp': '04b9c1ff46df7c40441ab9734d54a2bf61cddd1a27641d91f8a14c981e9b73f7',
+    'System/Gl/ARB_fragment_program/XRShader_DecalTM.fp': 'b852253c7663a24137bddd21b95ff8afcd30ec768dd6da0ed54a498fdc8f2696',
+    'System/Gl/ARB_fragment_program/XRShader_DecalNormalTransform.fp': 'f5cc4c563c85ad764011a1d5ef0ab9edffc46bf0b20293917e0036a8abecbd4a',
+    'System/Gl/ARB_fragment_program/XRShader_DecalNormalTransformTM.fp': '3543e82ea5718468930bc65b0de0d91ba8c8ff9b19be601ea14712740112556d',
+    'System/Gl/ARB_fragment_program/WModel_FXRenderSurface.fp': 'f838d51c608d147da88f016549630ecbf5cfbb06e41a69dea3bcdba705b4a9a5',
+    'System/Gl/ARB_fragment_program/WModel_FXBlackHole.fp': 'b338e77d358cb40bd784ee576057b408b9e962bd5f83cb8f8669188758fbbbf8',
+    'System/Gl/ARB_fragment_program/WModel_FXHeatHazeMask.fp': '7f3039894b8bad210b831b151129c91c86badf4b49179228383d7732cb35a8ca',
+    'System/Gl/ARB_fragment_program/GUIRGB2Grey.fp': 'e9a31b3989a27c1c31847b1469ca31231a125b8a05527537d44c3b9e440a93ae',
+    'System/Gl/ARB_fragment_program/CMWnd_ModTexture_PaintVideo_YUV2RGB.fp': '8581b0740ce479b1352ee0ef4221f938d0cea158a9a6e8270223799b6303452a',
     'System/Gl/ARB_fragment_program/WClientMod_DV5_0.fp': '0b44b474d46f01228f657175c2b817b6f7246ed65a6bfe4fb99af963b7201647',
     'System/Gl/ARB_fragment_program/WClientMod_DV5_1.fp': 'a99c1ce457f9d493975a9d05fffa3b138d714a1ffed6d78df18d97b69e2bdc9c',
     'System/Gl/ARB_fragment_program/XRShader_FP20_NDS.fp': '4d756e598bbb515c443e5175dbd4cf6967ccff1682dbbb398bc0a00f94e698b5',
@@ -60,6 +74,19 @@ VARIANTS = {'XRShader_FP20_NDSP': [0], 'XRShader_FP20_NDS': [0], 'XRShader_Motio
             'XRShader_FP20_LFM': [0],
             'XREngine_DepthFog': list(range(4)), 'XREngine_GaussClampedHurt': [0],
             'XREngine_MulFilter': [0]}
+
+# Shipped *generate decal light/projector combinations, with/without trimesh.
+DECAL_VARIANTS = sorted({flags | trimesh for flags in
+    (0, 2, 6, 14, 18, 22, 30, 54, 62, 126) for trimesh in (0, 1)})
+VARIANTS.update({
+    'VBOp_FP20_Water': [0], 'VBOp_FP20_CubeWater': [0],
+    'VBOp_FP20_Water2': [0, 1, 3, 5, 7], 'VBOp_FP20_CubeWater2': [0, 1, 3, 5, 7],
+    'XRShader_FP20_Decal': DECAL_VARIANTS, 'XRShader_DecalTMProj': [0],
+    'XRShader_DecalTM': [0], 'XRShader_DecalNormalTransform': [0],
+    'XRShader_DecalNormalTransformTM': [0], 'WModel_FXRenderSurface': [0],
+    'WModel_FXBlackHole': [0], 'WModel_FXHeatHazeMask': [0], 'GUIRGB2Grey': [0],
+    'CMWnd_ModTexture_PaintVideo_YUV2RGB': [0],
+})
 
 
 def select_template(source, flags, includes=None):
@@ -243,12 +270,13 @@ def compile_source(source):
                     raise ValueError('Invalid SWZ selector')
             expr = 'float4(' + ', '.join(lanes) + ')'
         else:
-            counts = {'MOV': 1, 'RCP': 1, 'RSQ': 1, 'FRC': 1, 'ADD': 2, 'SUB': 2, 'MUL': 2,
+            counts = {'MOV': 1, 'ABS': 1, 'RCP': 1, 'RSQ': 1, 'FRC': 1, 'ADD': 2, 'SUB': 2, 'MUL': 2,
                       'DP3': 2, 'DP4': 2, 'XPD': 2, 'POW': 2, 'MAD': 3, 'LRP': 3, 'MIN': 2, 'MAX': 2}
             if op not in counts or len(args) != counts[op]:
                 raise ValueError(f'Unsupported opcode or arity: {statement}')
             a = [operand(x) for x in args]
             if op == 'MOV': expr = a[0]
+            elif op == 'ABS': expr = f'abs({a[0]})'
             elif op == 'FRC': expr = f'frac({a[0]})'
             elif op in ('ADD', 'SUB', 'MUL'): expr = f'{a[0]} ' + {'ADD': '+', 'SUB': '-', 'MUL': '*'}[op] + f' {a[1]}'
             elif op in ('DP3', 'DP4'):
