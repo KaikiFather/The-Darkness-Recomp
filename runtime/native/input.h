@@ -52,9 +52,6 @@ public:
     void windowMessage(HWND window, UINT message, WPARAM key, LPARAM detail);
     void setMouseLookEnabled(bool enabled);
     bool mouseLookEnabled();
-    // The original client owns dialogue/menu focus independently of capture.
-    // Before its first signal, released capture permits startup menu input.
-    void setGuestMenuActive(bool active);
     bool setMouseSensitivity(float sensitivity);
     void mouseMotion(LONG dx, LONG dy);
     MouseLookDelta consumeMouseLook();
@@ -90,8 +87,7 @@ private:
     bool leftMouse_ = false;
     bool rightMouse_ = false;
     bool middleMouse_ = false;
-    bool mouseLook_ = false, escapePauses_ = false, guestMenuActive_ = false;
-    bool guestMenuContextKnown_ = false;
+    bool mouseLook_ = false, escapePauses_ = false;
     float mouseSensitivity_ = 1;
     int64_t mouseX_ = 0, mouseY_ = 0;
     uint64_t mouseEpoch_ = 0;

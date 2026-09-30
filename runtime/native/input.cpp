@@ -238,17 +238,6 @@ bool NativeInput::mouseLookEnabled() {
     std::lock_guard lock(mutex_);
     return mouseLook_;
 }
-void NativeInput::setGuestMenuActive(bool active) {
-    std::lock_guard lock(mutex_);
-    if (guestMenuContextKnown_ && guestMenuActive_ == active) return;
-    guestMenuContextKnown_ = true;
-    guestMenuActive_ = active;
-    // A detent belongs to the UI/gameplay context in which it arrived. Never
-    // replay a dialogue choice as a weapon switch when the dialogue closes.
-    wheelPending_ = wheelRemainder_ = 0;
-    wheelButton_ = 0;
-    wheelNext_ = 0;
-}
 bool NativeInput::setMouseSensitivity(float sensitivity) {
     if (!std::isfinite(sensitivity) || sensitivity < .1f || sensitivity > 10.f) return false;
     std::lock_guard lock(mutex_);
@@ -293,7 +282,6 @@ void NativeInput::attachWindow(HWND window) {
     stopVibrationLocked();
     clearKeysLocked();
     resetPromptLocked();
-    guestMenuActive_ = guestMenuContextKnown_ = false;
     window_ = window;
     focused_ = false;
     settingsOpen_ = false;
@@ -324,7 +312,6 @@ void NativeInput::windowMessage(HWND window, UINT message, WPARAM key, LPARAM de
         clearKeysLocked();
         stopVibrationLocked();
         resetPromptLocked();
-        guestMenuActive_ = guestMenuContextKnown_ = false;
         window_ = nullptr;
         focused_ = false;
     } else if (message == WM_CAPTURECHANGED) {
@@ -360,7 +347,7 @@ void NativeInput::windowMessage(HWND window, UINT message, WPARAM key, LPARAM de
             middleMouse_ = message == WM_MBUTTONDOWN;
             if (middleMouse_) promptSource_.store(PromptInputSource::KeyboardMouse, std::memory_order_release);
         }
-        else if (message == WM_MOUSEWHEEL && (mouseLook_ || guestMenuActive_ || !guestMenuContextKnown_)) {
+        else if (message == WM_MOUSEWHEEL && mouseLook_) {
             promptSource_.store(PromptInputSource::KeyboardMouse, std::memory_order_release);
             wheelRemainder_ += GET_WHEEL_DELTA_WPARAM(key);
             wheelPending_ = std::clamp(wheelPending_ + wheelRemainder_ / WHEEL_DELTA, -16, 16);
@@ -407,20 +394,17 @@ XINPUT_GAMEPAD NativeInput::keyboardLocked() {
     pad.bRightTrigger = ((mouseLook_ && leftMouse_) || keys_['X']) ? 255 : 0;
     if (mouseLook_) {
         if (middleMouse_) pad.wButtons |= XINPUT_GAMEPAD_RIGHT_THUMB;
-    }
-    const auto now = api_.ticks();
-    if (now >= wheelNext_) {
-        if (wheelButton_) { wheelButton_ = 0; wheelNext_ = now + 20; }
-        else if (wheelPending_) {
-            const bool menu = guestMenuActive_ || (!mouseLook_ && !guestMenuContextKnown_);
-            wheelButton_ = wheelPending_ > 0
-                ? (menu ? XINPUT_GAMEPAD_DPAD_UP : XINPUT_GAMEPAD_DPAD_RIGHT)
-                : (menu ? XINPUT_GAMEPAD_DPAD_DOWN : XINPUT_GAMEPAD_DPAD_LEFT);
-            wheelPending_ += wheelPending_ > 0 ? -1 : 1;
-            wheelNext_ = now + 40;
+        const auto now = api_.ticks();
+        if (now >= wheelNext_) {
+            if (wheelButton_) { wheelButton_ = 0; wheelNext_ = now + 20; }
+            else if (wheelPending_) {
+                wheelButton_ = wheelPending_ > 0 ? XINPUT_GAMEPAD_DPAD_RIGHT : XINPUT_GAMEPAD_DPAD_LEFT;
+                wheelPending_ += wheelPending_ > 0 ? -1 : 1;
+                wheelNext_ = now + 40;
+            }
         }
+        pad.wButtons |= wheelButton_;
     }
-    pad.wButtons |= wheelButton_;
     return pad;
 }
 DWORD NativeInput::getState(Memory& owner, uint32_t user, uint32_t flags, uint32_t output) {

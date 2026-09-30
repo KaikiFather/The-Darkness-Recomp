@@ -13,42 +13,6 @@ from compile_world_fragment import ASSETS, VARIANTS, compile_source, compile_fix
 
 
 class WorldFragmentTests(unittest.TestCase):
-    def test_water_variants_keep_reflection_refraction_and_fog(self):
-        directory = ROOT / 'Darkness/System/Gl/ARB_fragment_program'
-        includes = {'Include_XREngine_Fog.fph': (directory / 'Include_XREngine_Fog.fph').read_text(encoding='latin-1')}
-        for name in ('VBOp_FP20_Water', 'VBOp_FP20_CubeWater', 'VBOp_FP20_Water2', 'VBOp_FP20_CubeWater2'):
-            source = (directory / (name + '.fp')).read_text(encoding='latin-1')
-            for flags in VARIANTS[name]:
-                code, metadata = compile_source(select_template(source, flags, includes))
-                slots = {0: 'CUBE' if 'Cube' in name else '2D', 1: '2D', 2: '2D', 4: '2D'}
-                if flags & 2: slots[7] = 'CUBE'
-                if flags & 4: slots[6] = '2D'
-                self.assertEqual(metadata['textures'], slots)
-                self.assertIn('texture4.Sample(', code)
-                self.assertNotIn('@', code)
-
-    def test_decals_preserve_projection_kills_lights_and_high_constants(self):
-        directory = ROOT / 'Darkness/System/Gl/ARB_fragment_program'
-        source = (directory / 'XRShader_FP20_Decal.fp').read_text(encoding='latin-1')
-        self.assertEqual(len(VARIANTS['XRShader_FP20_Decal']), 20)
-        for flags in VARIANTS['XRShader_FP20_Decal']:
-            code, metadata = compile_source(select_template(source, flags))
-            slots = {0: '2D', 1: '2D', 2: '2D'}
-            for bit, slot in ((16, 3), (32, 4), (64, 5)):
-                if flags & bit: slots[slot] = 'CUBE'
-            self.assertEqual(metadata['textures'], slots)
-            self.assertEqual('clip(' in code, bool(flags & 1))
-            if flags == 127:
-                self.assertIn('env[33]', code)
-                self.assertIn('abs((r2.xxxx))', code)
-        code, metadata = compile_source((directory / 'XRShader_DecalTMProj.fp').read_text(encoding='latin-1'))
-        self.assertEqual(metadata['textures'], {0: '2D'})
-        self.assertEqual(code.count('clip('), 3)
-        code, _ = compile_source('OUTPUT o = result.color; PARAM c = program.env[0]; ABS_SAT o.xz, -c; MOV o.yw, 1; END')
-        self.assertIn('o.xz = (saturate(abs((-c)))).xz;', code)
-        with self.assertRaises(ValueError):
-            compile_source('OUTPUT o = result.color; ABS o, 1, 2; END')
-
     def test_darkness_vision_permutations_and_xenon_depth(self):
         directory = ROOT / 'Darkness/System/Gl/ARB_fragment_program'
         for stage in (0, 1):

@@ -22,7 +22,6 @@ static void put(uint8_t* p,uint32_t x) {for(unsigned i=0;i<4;++i)p[i]=uint8_t(x>
 #include "world_palette_usage_tests.h"
 #include "world_shadow_input_tests.h"
 #include "world_position_usage_tests.h"
-#include "world_water_usage_tests.h"
 #include "world_vertex_validation_tests.h"
 static void formats() {
     StoredGeometry g;g.vertexCount=1;g.stride=12;g.formats[0]=15;g.formats[1]=10;g.formats[9]=14;
@@ -953,8 +952,6 @@ static void immediateCanonicalContract(WorldRendererD3D11& renderer) {
 #include "darkness_effect_tests.h"
 #include "world_alpha_coverage_tests.h"
 #include "world_projected_texture_tests.h"
-#include "world_material_tests.h"
-#include "world_video_tests.h"
 #include "world_shadow_projection_tests.h"
 #include "world_shadow_bias_tests.h"
 #include "world_shadow_camera_tests.h"
@@ -1513,9 +1510,6 @@ static void passes(ID3D11Device* device,ID3D11DeviceContext* context) {
     deeperResources(renderer,device,context,histogramDraw);
     alphaCoveragePass(renderer,histogramDraw,1);
     projectedTexturePass(renderer,1);
-    waterMaterialPass(renderer,1);
-    worldVideoPass(renderer,1);
-    projectedMarkPass(renderer,1);
     shadowProjectionPass(renderer,histogramDraw,1);
     shadowBiasPass(renderer,histogramDraw,1);
     shadowCameraPass(renderer,histogramDraw,1);
@@ -1563,9 +1557,6 @@ static void passes(ID3D11Device* device,ID3D11DeviceContext* context) {
         std::printf("PhysicalRaster%u: %u covered pixels, %u mixed logical edge blocks retained through resolve/present.\n",scale,physicalCoverage,mixedBlocks);
         alphaCoveragePass(scaled,histogramDraw,scale);
         projectedTexturePass(scaled,scale);
-        waterMaterialPass(scaled,scale);
-        worldVideoPass(scaled,scale);
-        projectedMarkPass(scaled,scale);
         shadowProjectionPass(scaled,histogramDraw,scale);
         shadowBiasPass(scaled,histogramDraw,scale);
         shadowCameraPass(scaled,histogramDraw,scale);
@@ -1739,7 +1730,7 @@ int main(int argc,char** argv) {
     promptWorldContract();
     ComPtr<ID3D11Device> device;
     try {
-        formats();paletteUsageContract();paletteArithmeticContract();worldPositionUsageContract();worldWaterUsageContract();worldShadowInputContract();
+        formats();paletteUsageContract();paletteArithmeticContract();worldPositionUsageContract();worldShadowInputContract();
         worldVertexValidationContract();immediateIndexOwnershipContract();
         if(argc>1 && std::strcmp(argv[1],"--cpu-only")==0) {
             std::puts("World vertex preparation CPU contracts passed; no D3D device created.");

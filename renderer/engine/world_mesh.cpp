@@ -27,7 +27,7 @@ std::atomic<unsigned> immediateCanonicalLog1371{}, immediateCanonicalLog1477{};
 uint32_t word(const uint8_t* p) { return uint32_t(p[0])<<24 | uint32_t(p[1])<<16 | uint32_t(p[2])<<8 | p[3]; }
 uint16_t half(const uint8_t* p) { return uint16_t(uint16_t(p[0])<<8 | p[1]); }
 bool finite(const EngineVector& v) { return std::all_of(v.begin(),v.end(),[](float x){return std::isfinite(x);}); }
-bool supportedMode(uint8_t m) { return m==0 || m==1 || m==4 || m==7 || m==8 || m==9 || m==10 || m==11 || m==13 || m==16 || m==17 || m==18 || m==20 || m==22 || m==23 || m==24; }
+bool supportedMode(uint8_t m) { return m==0 || m==1 || m==4 || m==7 || m==8 || m==9 || m==10 || m==13 || m==16 || m==17 || m==18 || m==20 || m==22; }
 __attribute__((target("ssse3"))) bool copyFiniteVectorsSimd(const uint8_t* source,EngineVector* output,unsigned count) {
     const auto endian=_mm_setr_epi8(3,2,1,0,7,6,5,4,11,10,9,8,15,14,13,12);
     const auto absolute=_mm_set1_epi32(0x7FFFFFFF),maximum=_mm_set1_epi32(0x7F7FFFFF);
@@ -193,8 +193,8 @@ bool locateImmediateNonfinite(const StoredGeometry& g,ImmediateCaptureReason& ou
 }
 // Task-62b recovery: NaN/Inf allocator leftovers in immediate vertices that no
 // index references must not reject visible triangles (all-zero bytes decode
-// finite in every format). Zeroes every unreferenced vertex, including tail and
-// interior holes, in a still-unpublished owned copy, preserving live
+// finite in every format). Zeroes every unreferenced vertex — tail and
+// interior holes alike — in a still-unpublished owned copy, preserving live
 // bytes; indices are untouched, so order, winding and duplicates survive.
 // Takes the SAME owned index snapshot that the caller validated OOB-free and
 // will publish, so canonicalization and submission cannot disagree; OOB
@@ -587,13 +587,8 @@ static bool prepareWorldVertexProgramInto(const EngineVertexBindingSnapshot& b, 
                               (d.flags&(1u<<(8+s))))) return reject("basis-mode",s,d.modes[s]);
         if (((d.modes[s]==7 || d.modes[s]==13 || d.modes[s]==22) && s!=0) || (d.modes[s]==17 && s!=5) ||
             (d.modes[s]==10 && s!=1) ||
-            (d.modes[s]==11 && s!=3) || (d.modes[s]==23 && s!=4) || (d.modes[s]==24 && s!=5) ||
             (d.modes[s]==9 && s!=3 && s!=4 && s!=5) ||
             (d.modes[s]==16 && s!=3 && s!=4 && s!=5)) return reject("mode-stage",s,d.modes[s]);
-        // Cache2/438/439 Water/CubeWater export the prepared basis. These
-        // modes have no parameter rows and require the original input flags.
-        if ((d.modes[s]==11 && !o.normal) || ((d.modes[s]==23 || d.modes[s]==24) && !o.tangents))
-            return reject("water-basis-input",s,d.modes[s]);
         o.modes[s]=d.modes[s]; o.coordinates[s]=uint8_t((d.coordinateMapping>>(8+3*s))&7);
         o.conversions[s]=(d.flags&(1u<<o.coordinates[s]))!=0; o.matrices[s]=(d.flags&(1u<<(8+s)))!=0;
         c.references[s+1]={d.conversions[s],d.matrices[s],d.parameters[s][0],0};
@@ -766,10 +761,8 @@ bool prepareWorldVertexProgramWithGeometry(const EngineVertexBindingSnapshot& b,
                                     (d.flags & (1u << (8 + s))))) return false;
             if (((d.modes[s] == 7 || d.modes[s] == 13 || d.modes[s] == 22) && s != 0) || (d.modes[s] == 17 && s != 5) ||
                 (d.modes[s] == 10 && s != 1) ||
-                (d.modes[s] == 11 && s != 3) || (d.modes[s] == 23 && s != 4) || (d.modes[s] == 24 && s != 5) ||
                 (d.modes[s] == 9 && s != 3 && s != 4 && s != 5) ||
                 (d.modes[s] == 16 && s != 3 && s != 4 && s != 5)) return false;
-            if ((d.modes[s] == 11 && !o.normal) || ((d.modes[s] == 23 || d.modes[s] == 24) && !o.tangents)) return false;
             o.modes[s] = d.modes[s]; o.coordinates[s] = uint8_t((d.coordinateMapping >> (8 + 3 * s)) & 7);
             o.conversions[s] = (d.flags & (1u << o.coordinates[s])) != 0; o.matrices[s] = (d.flags & (1u << (8 + s))) != 0;
             c.references[s + 1] = {d.conversions[s], d.matrices[s], d.parameters[s][0], 0};
@@ -890,8 +883,8 @@ static bool snapshotWorldDrawInto(uint8_t* base,const StoredDraw& geometry,World
             else result.material=WorldMaterial::post;
             result.fragmentName=name.data();result.fragmentFlags=word(program.data()+16)>>8;
             const auto count=word(program.data()+16)&255u;
-            if (count>result.fragmentConstants.size() || (result.material==WorldMaterial::ndsp && count<4)) return fail(6);
-            std::array<uint8_t,64*16> env{};
+            if (count>16 || (result.material==WorldMaterial::ndsp && count<4)) return fail(6);
+            std::array<uint8_t,256> env{};
             // Original822478C0 uploads to device+6016. Read that completed
             // copy, not the GUI's mutable program parameter allocation.
             if (count && !copyRenderMemory(base,geometry.vertexBindings->deviceAddress+6016,env.data(),count*16)) return fail(7);
